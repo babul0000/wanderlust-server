@@ -3,6 +3,7 @@ const dotenv = require('dotenv')
 const cors = require('cors')
 dotenv.config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 const uri = process.env.MONGODB_URI
 const app = express()
 
@@ -19,13 +20,43 @@ const client = new MongoClient(uri, {
     }
 });
 
+// install npm i jose-cjs
+// tarpor seta akhane call korte hobe
+// tarpor seta verify korte hobe sem nicer coder moto
+
+const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+)
+
+const verifyToken = async (req, res, next) => {
+    const header = req?.headers.authorization
+    if (!header) {
+        return res.status(401).json({ message: 'unauthorization' })
+    }
+    const token = header.split(' ')[1]
+    if (!token) {
+        return res.status(401).json({ message: 'unauthorization' })
+    }
+    console.log(token);
+    try {
+        const { payload } = await jwtVerify(token, JWKS)
+        console.log(payload);
+        next()
+    } catch (error) {
+        return res.status(403).json({ message: 'forbidden' })
+    }
+    // ay pojonto holo total verify er kaj
+}
+
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const db = client.db('wanderlust')
         const destinationCollection = db.collection('destination')
+        const bookingCollection = db.collection('booking')
 
         app.get('/destination', async (req, res) => {
             const result = await destinationCollection.find().toArray()
@@ -39,7 +70,7 @@ async function run() {
         })
 
 
-        app.get('/destination/:id', async (req, res) => {
+        app.get('/destination/:id', verifyToken, async (req, res) => {
             const { id } = req.params
 
             const result = await destinationCollection.findOne({ _id: new ObjectId(id) })
@@ -64,9 +95,27 @@ async function run() {
             res.json(result)
         })
 
+        app.get('/booking/:userId', verifyToken, async (req, res) => {
+            const { userId } = req.params
+            const result = await bookingCollection.find({ userId: userId }).toArray()
+            res.json(result)
+        })
+
+        app.post('/booking', verifyToken, async (req, res) => {
+            const bookingData = req.body;
+            const result = await bookingCollection.insertOne(bookingData)
+            res.json(result)
+        })
+
+        app.delete('/booking/:bookingId', verifyToken, async (req, res) => {
+            const { bookingId } = req.params
+            const result = await bookingCollection.deleteOne({ _id: new ObjectId(bookingId) })
+            res.json(result)
+        })
+
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
