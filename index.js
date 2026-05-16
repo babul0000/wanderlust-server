@@ -58,6 +58,12 @@ async function run() {
         const destinationCollection = db.collection('destination')
         const bookingCollection = db.collection('booking')
 
+
+        app.get('/featured', async (req, res) => {
+            const result = await destinationCollection.find().limit(4).toArray()
+            res.send(result)
+        })
+
         app.get('/destination', async (req, res) => {
             const result = await destinationCollection.find().toArray()
             res.send(result)
@@ -130,5 +136,4 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`server runNiNg on port ${PORT}`);
-
 })
